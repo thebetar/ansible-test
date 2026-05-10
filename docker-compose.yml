@@ -1,9 +1,13 @@
 services:
-    build-agent-01:
-        image: python:3.12-slim
-        container_name: build-agent-01
+    kwiq-mq:
+        image: golang:1.26.3-trixie
+        container_name: kwiq-mq
         command: sleep infinity
-    build-agent-02:
+    queue-consumer:
         image: python:3.12-slim
-        container_name: build-agent-02
+        container_name: queue-handler
+        command: sleep infinity
+    queue-publisher:
+        image: python:3.12-slim
+        container_name: queue-producer
         command: sleep infinity

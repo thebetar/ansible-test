@@ -1,0 +1,8 @@
+---
+myhosts:
+    hosts:
+        build-agent-01:
+        build-agent-02:
+    vars:
+        ansible_connection: docker
+        ansible_python_interpreter: /usr/local/bin/python3.12
