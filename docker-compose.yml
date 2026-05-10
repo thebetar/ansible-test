@@ -1,52 +1,15 @@
 services:
     kwiq-mq:
-        build:
-            context: ./kwiq-mq
-            dockerfile: Dockerfile
+        image: debian:trixie-slim
         container_name: kwiq-mq
-        ports:
-            - '10526:10526'
-        volumes:
-            - kwiq-mq-data:/app/data
-        environment:
-            - DATA_DIR=/app/data
-        restart: unless-stopped
-        healthcheck:
-            test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:10526/health']
-            interval: 10s
-            timeout: 5s
-            retries: 5
-            start_period: 10s
+        command: sleep infinity
 
     queue-consumer:
-        image: python:3.12-slim
+        image: debian:trixie-slim
         container_name: queue-consumer
         command: sleep infinity
-        environment:
-            - BASE_URL=http://kwiq-mq:10526
-            - SUBJECT=test-subject
-            - SCHEDULER_INTERVAL=10
-        depends_on:
-            kwiq-mq:
-                condition: service_healthy
-        volumes:
-            - ./consumer:/app
-        working_dir: /app
 
     queue-producer:
-        image: python:3.12-slim
+        image: debian:trixie-slim
         container_name: queue-producer
         command: sleep infinity
-        environment:
-            - BASE_URL=http://kwiq-mq:10526
-            - SUBJECT=test-subject
-            - SCHEDULER_INTERVAL=10
-        depends_on:
-            kwiq-mq:
-                condition: service_healthy
-        volumes:
-            - ./publisher:/app
-        working_dir: /app
-
-volumes:
-    kwiq-mq-data:

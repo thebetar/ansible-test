@@ -1,0 +1,176 @@
+- name: Bootstrap Python on all containers
+  hosts: all
+  gather_facts: false
+  tasks:
+      - name: Install Python3 and essential tools
+        raw: apt-get update -qq && apt-get install -y -qq python3 ca-certificates tar
+
+- name: Setup kwiq-mq broker
+  hosts: kwiq-mq
+  tasks:
+      - name: Install Git
+        apt:
+            name: git
+            state: present
+
+      - name: Download Go 1.26.3
+        get_url:
+            url: https://go.dev/dl/go1.26.3.linux-amd64.tar.gz
+            dest: /tmp/go.tar.gz
+            mode: '0644'
+
+      - name: Extract Go to /usr/local
+        unarchive:
+            src: /tmp/go.tar.gz
+            dest: /usr/local/
+            remote_src: yes
+
+      - name: Clone kwik-mq repository
+        git:
+            repo: https://github.com/thebetar/kwik-mq.git
+            dest: /app/kwik-mq
+            version: develop
+            depth: 1
+
+      - name: Build kwik-mq binary
+        command: /usr/local/go/bin/go build -o kwik-mq cmd/kwik-mq/main.go
+        args:
+            chdir: /app/kwik-mq
+
+      - name: Create data directory
+        file:
+            path: /app/kwik-mq/data
+            state: directory
+            mode: '0755'
+
+      - name: Start kwik-mq service
+        shell: /app/kwik-mq/kwik-mq
+        args:
+            chdir: /app/kwik-mq
+        environment:
+            DATA_DIR: /app/kwik-mq/data
+        async: 2592000
+        poll: 0
+
+      - name: Wait for kwiq-mq to be ready
+        wait_for:
+            host: 127.0.0.1
+            port: 10526
+            timeout: 30
+
+- name: Setup queue consumer
+  hosts: queue-consumer
+  tasks:
+      - name: Create app directory
+        file:
+            path: /app/consumer
+            state: directory
+            mode: '0755'
+
+      - name: Download Go 1.26.3
+        get_url:
+            url: https://go.dev/dl/go1.26.3.linux-amd64.tar.gz
+            dest: /tmp/go.tar.gz
+            mode: '0644'
+
+      - name: Extract Go to /usr/local
+        unarchive:
+            src: /tmp/go.tar.gz
+            dest: /usr/local/
+            remote_src: yes
+
+      - name: Copy consumer source files
+        copy:
+            src: consumer/{{ item }}
+            dest: /app/consumer/{{ item }}
+        loop:
+            - main.go
+            - go.mod
+
+      - name: Build consumer binary
+        command: /usr/local/go/bin/go build -o consumer main.go
+        args:
+            chdir: /app/consumer
+
+- name: Setup queue producer
+  hosts: queue-producer
+  tasks:
+      - name: Create app directory
+        file:
+            path: /app/producer
+            state: directory
+            mode: '0755'
+
+      - name: Download Go 1.26.3
+        get_url:
+            url: https://go.dev/dl/go1.26.3.linux-amd64.tar.gz
+            dest: /tmp/go.tar.gz
+            mode: '0644'
+
+      - name: Extract Go to /usr/local
+        unarchive:
+            src: /tmp/go.tar.gz
+            dest: /usr/local/
+            remote_src: yes
+
+      - name: Copy producer source files
+        copy:
+            src: publisher/{{ item }}
+            dest: /app/producer/{{ item }}
+        loop:
+            - main.go
+            - go.mod
+
+      - name: Build producer binary
+        command: /usr/local/go/bin/go build -o producer main.go
+        args:
+            chdir: /app/producer
+
+- name: Verify all environments
+  hosts: all
+  tasks:
+      - name: Verify queue health
+        uri:
+            url: http://kwiq-mq:10526/health
+            method: GET
+        register: health_check
+
+      - name: Print health check result
+        debug:
+            msg: 'Queue health on {{ inventory_hostname }}: {{ health_check.status }}'
+
+- name: Test message queue - push from producer
+  hosts: queue-producer
+  tasks:
+      - name: Run producer binary
+        command: /app/producer/producer --once
+        environment:
+            BASE_URL: http://kwiq-mq:10526
+            SUBJECT: ansible-test
+        register: push_result
+
+      - name: Print push result
+        debug:
+            msg: '{{ push_result.stdout }}'
+
+- name: Test message queue - pop from consumer
+  hosts: queue-consumer
+  tasks:
+      - name: Run consumer binary
+        command: /app/consumer/consumer --once
+        environment:
+            BASE_URL: http://kwiq-mq:10526
+            SUBJECT: ansible-test
+        register: consume_result
+
+      - name: Assert message was consumed
+        assert:
+            that:
+                - consume_result.rc == 0
+                - "'consumed successfully' in consume_result.stdout"
+            fail_msg: 'Queue test FAILED - no message received'
+            success_msg: 'Queue test PASSED - message successfully pushed and consumed'
+
+      - name: Print consumed message
+        debug:
+            msg: '{{ consume_result.stdout }}'
