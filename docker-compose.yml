@@ -1,13 +1,52 @@
 services:
     kwiq-mq:
-        image: golang:1.26.3-trixie
+        build:
+            context: ./kwiq-mq
+            dockerfile: Dockerfile
         container_name: kwiq-mq
-        command: sleep infinity
+        ports:
+            - '10526:10526'
+        volumes:
+            - kwiq-mq-data:/app/data
+        environment:
+            - DATA_DIR=/app/data
+        restart: unless-stopped
+        healthcheck:
+            test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:10526/health']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+
     queue-consumer:
         image: python:3.12-slim
-        container_name: queue-handler
+        container_name: queue-consumer
         command: sleep infinity
-    queue-publisher:
+        environment:
+            - BASE_URL=http://kwiq-mq:10526
+            - SUBJECT=test-subject
+            - SCHEDULER_INTERVAL=10
+        depends_on:
+            kwiq-mq:
+                condition: service_healthy
+        volumes:
+            - ./consumer:/app
+        working_dir: /app
+
+    queue-producer:
         image: python:3.12-slim
         container_name: queue-producer
         command: sleep infinity
+        environment:
+            - BASE_URL=http://kwiq-mq:10526
+            - SUBJECT=test-subject
+            - SCHEDULER_INTERVAL=10
+        depends_on:
+            kwiq-mq:
+                condition: service_healthy
+        volumes:
+            - ./publisher:/app
+        working_dir: /app
+
+volumes:
+    kwiq-mq-data:

@@ -1,0 +1,56 @@
+- name: Verify agent environments
+  hosts: myhosts
+  tasks:
+      - name: Check Python version
+        command: python --version
+        register: python_version
+
+      - name: Print Python version
+        debug:
+            msg: 'Python version on {{ inventory_hostname }} is {{ python_version.stdout }}'
+
+      - name: Verify queue connectivity
+        uri:
+            url: http://kwiq-mq:10526/health
+            method: GET
+        register: health_check
+
+      - name: Print health check result
+        debug:
+            msg: 'Queue health status: {{ health_check.status }}'
+
+- name: Test message queue - publish
+  hosts: queue-producer
+  tasks:
+      - name: Push test message to queue
+        uri:
+            url: http://kwiq-mq:10526/queue/push?id=ansible-test
+            method: POST
+            body: '{"message": "Hello from Ansible test!"}'
+            body_format: json
+        register: push_result
+
+      - name: Print push result
+        debug:
+            msg: 'Push status: {{ push_result.status }}'
+
+- name: Test message queue - consume
+  hosts: queue-consumer
+  tasks:
+      - name: Pop test message from queue
+        uri:
+            url: http://kwiq-mq:10526/queue/pop?id=ansible-test
+            method: GET
+        register: consume_result
+
+      - name: Assert message was received
+        assert:
+            that:
+                - consume_result.status == 200
+                - consume_result.json is defined
+            fail_msg: 'Queue test FAILED - no message received'
+            success_msg: 'Queue test PASSED - message successfully pushed and consumed'
+
+      - name: Print consumed message
+        debug:
+            msg: 'Consumed: {{ consume_result.json }}'

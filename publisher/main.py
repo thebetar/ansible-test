@@ -3,8 +3,6 @@ import time
 import urllib.request
 import json
 
-from consumer.main import consume_message
-
 BASE_URL = os.getenv("BASE_URL", "http://localhost:10526")
 SUBJECT = os.getenv("SUBJECT", "test-subject")
 SCHEDULER_INTERVAL = int(os.getenv("SCHEDULER_INTERVAL", "10"))
