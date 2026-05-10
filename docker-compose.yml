@@ -1,0 +1,9 @@
+services:
+    build-agent-01:
+        image: python:3.12-slim
+        container_name: build-agent-01
+        command: sleep infinity
+    build-agent-02:
+        image: python:3.12-slim
+        container_name: build-agent-02
+        command: sleep infinity
