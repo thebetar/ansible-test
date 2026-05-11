@@ -1,0 +1,3 @@
+[submodule "kwik-mq"]
+	path = kwik-mq
+	url = https://github.com/thebetar/kwik-mq
